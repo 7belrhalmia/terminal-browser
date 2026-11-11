@@ -34,6 +34,8 @@ import { browsers, describe, recordKey } from "./instances";
 import type { Browser } from "./instances";
 import { findHosts, openInHost } from "./interop";
 import { lsCommand } from "./ls";
+import type { Listed } from "./ls";
+import { forward, isRemoteKey, isWebAddress, pickSide, remoteSides, serveRemote } from "./remote";
 import { instances } from "./registry";
 import { apparmorSetup, deniedRefusal, linuxSandboxError, sandboxRefusal } from "./sandbox";
 import { appExecutable } from "@zenbu-labs/pixel/app-executable";
@@ -383,6 +385,7 @@ async function sshSetup(argv: string[]): Promise<void> {
   for (const signal of signals) process.on(signal, interrupt);
   const session = await connectSsh({ target, status: (line) => process.stdout.write(`ssh: ${line}\n`) });
   argv.push(`--socks-port=${session.socksPort}`);
+  serveRemote(session, process.env.PIXEL_TTY ?? ownTtyPath(), [process.execPath, process.argv[1]]);
   for (const signal of signals) process.removeListener(signal, interrupt);
 }
 
@@ -790,7 +793,12 @@ async function main(): Promise<number> {
     return 0;
   }
   if (command !== "setup") ensureSetup();
+  const sides = ["open", "ls", "new-tab", "action"].includes(command) ? await remoteSides() : [];
   if (command === "open") {
+    const url = args.find((arg) => !arg.startsWith("-"));
+    if (sides.length > 0 && url !== undefined && isWebAddress(url) && args.every((arg) => arg === url)) {
+      return forward(sides[0], ["new-tab", url]);
+    }
     await openCommand(args);
     return 0;
   }
@@ -798,7 +806,8 @@ async function main(): Promise<number> {
     requirePaneAccess();
     const all = takeBoolFlag(args, "--all");
     const json = takeBoolFlag(args, "--json");
-    await lsCommand((await currentTerminal()).terminal, all, json);
+    const remote = sides.flatMap((side) => side.browsers) as unknown as Listed[];
+    await lsCommand((await currentTerminal()).terminal, all, json, remote);
     return 0;
   }
   if (command === "setup") return setupCommand(electronBinary());
@@ -812,7 +821,10 @@ async function main(): Promise<number> {
   if (command === "new-tab") {
     requirePaneAccess();
     const key = takeFlag(args, "--browser");
-    return newTabCommand(args.find((arg) => !arg.startsWith("-")), key);
+    const url = args.find((arg) => !arg.startsWith("-"));
+    const side = isRemoteKey(key) || key === undefined ? pickSide(sides, key) : null;
+    if (side && (url === undefined || isWebAddress(url))) return forward(side, ["new-tab", ...(url ? [url] : [])]);
+    return newTabCommand(url, key);
   }
   if (command === "clear-browsing-data") {
     requirePaneAccess();
@@ -820,6 +832,13 @@ async function main(): Promise<number> {
   }
   if (command === "action") {
     requirePaneAccess();
+    const named = args.indexOf("--browser") === -1 ? undefined : args[args.indexOf("--browser") + 1];
+    const side = isRemoteKey(named) || named === undefined ? pickSide(sides, named) : null;
+    if (side) {
+      const rest = [...args];
+      if (named !== undefined) rest.splice(rest.indexOf("--browser"), 2);
+      return forward(side, ["action", ...rest]);
+    }
     const { own, passthrough } = splitPassthrough(args);
     const options = {
       browserKey: takeFlag(own, "--browser"),

@@ -200,6 +200,7 @@ export interface SshSessionOptions extends SshOptions {
 
 export interface SshSession {
   destination: string;
+  controlPath: string;
   socksPort: number;
   url: string | undefined;
   view: { proxy: string; partition: string };
@@ -234,6 +235,7 @@ export async function connectSsh(options: SshSessionOptions): Promise<SshSession
   }
   return {
     destination: tunnel.destination,
+    controlPath: tunnel.controlPath,
     socksPort: tunnel.socksPort,
     url: bundle?.url,
     view: {

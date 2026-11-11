@@ -4,7 +4,7 @@ import type { Terminal } from "@zenbu-labs/pixel/terminal";
 import { browsers, recordKey, targets } from "./instances";
 import type { Browser, TabTarget } from "./instances";
 
-interface Listed {
+export interface Listed {
   key: string;
   pid: number;
   cdpPort: number | null;
@@ -54,10 +54,10 @@ function render(list: Listed[]): string {
   return `${lines.join("\n")}\n`;
 }
 
-export async function lsCommand(terminal: Terminal | null, all: boolean, json: boolean) {
+export async function lsCommand(terminal: Terminal | null, all: boolean, json: boolean, remote: Listed[] = []) {
   const found = await browsers(terminal);
   const scoped = all ? found : found.filter((browser) => browser.inCurrentTab);
-  const list = await collect(scoped);
+  const list = [...(await collect(scoped)), ...remote];
   if (!json) {
     process.stdout.write(render(list));
     if (!all && found.length > list.length) {
