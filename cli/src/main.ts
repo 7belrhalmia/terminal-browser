@@ -35,6 +35,7 @@ import type { Browser } from "./instances";
 import { findHosts, openInHost } from "./interop";
 import { lsCommand } from "./ls";
 import type { Listed } from "./ls";
+import { serveFile, serveFilesCommand } from "./file-server";
 import { forward, isRemoteKey, isWebAddress, pickSide, remoteSides, serveRemote } from "./remote";
 import { instances } from "./registry";
 import { apparmorSetup, deniedRefusal, linuxSandboxError, sandboxRefusal } from "./sandbox";
@@ -773,6 +774,14 @@ function helpCommand(topic: string | undefined): number {
   return 0;
 }
 
+// What a browser shown on another computer can load for this argument: a web address as it is,
+// a local file through this machine's own file server, anything else not at all.
+async function remotePage(url: string): Promise<string | null> {
+  if (isWebAddress(url)) return url;
+  if (fs.existsSync(url) && fs.statSync(url).isFile()) return serveFile(url, [process.execPath, process.argv[1]]);
+  return null;
+}
+
 async function main(): Promise<number> {
   const [command, ...args] = process.argv.slice(2);
   if (command === "--help" || command === "-h") {
@@ -793,12 +802,12 @@ async function main(): Promise<number> {
     return 0;
   }
   if (command !== "setup") ensureSetup();
+  if (command === "serve-files") return serveFilesCommand(args[0]);
   const sides = ["open", "ls", "new-tab", "action"].includes(command) ? await remoteSides() : [];
   if (command === "open") {
     const url = args.find((arg) => !arg.startsWith("-"));
-    if (sides.length > 0 && url !== undefined && isWebAddress(url) && args.every((arg) => arg === url)) {
-      return forward(sides[0], ["new-tab", url]);
-    }
+    const page = sides.length > 0 && url !== undefined && args.every((arg) => arg === url) ? await remotePage(url) : null;
+    if (page) return forward(sides[0], ["new-tab", page]);
     await openCommand(args);
     return 0;
   }
@@ -823,7 +832,8 @@ async function main(): Promise<number> {
     const key = takeFlag(args, "--browser");
     const url = args.find((arg) => !arg.startsWith("-"));
     const side = isRemoteKey(key) || key === undefined ? pickSide(sides, key) : null;
-    if (side && (url === undefined || isWebAddress(url))) return forward(side, ["new-tab", ...(url ? [url] : [])]);
+    const page = side && url !== undefined ? await remotePage(url) : null;
+    if (side && (url === undefined || page)) return forward(side, ["new-tab", ...(page ? [page] : [])]);
     return newTabCommand(url, key);
   }
   if (command === "clear-browsing-data") {
