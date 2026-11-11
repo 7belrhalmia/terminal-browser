@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Box, Image, Text } from "@zenbu-labs/pixel";
-import type { Rgba } from "@zenbu-labs/pixel";
+import { Box, Image, Input, Text } from "@zenbu-labs/pixel";
+import type { NodeHandle, Rgba } from "@zenbu-labs/pixel";
 import { displayUrl } from "../url";
 import { Icon } from "./icons";
 import type { IconName } from "./icons";
@@ -164,12 +164,44 @@ function Indicator({
   );
 }
 
+function UrlField({
+  url,
+  actions,
+  rem,
+  theme,
+}: {
+  url: string;
+  actions: ChromeActions;
+  rem: number;
+  theme: Theme;
+}) {
+  const [value, setValue] = useState(url === "about:blank" ? "" : url);
+  const input = useRef<NodeHandle | null>(null);
+  useEffect(() => {
+    input.current?.focus();
+    input.current?.selectAll();
+  }, []);
+  return (
+    <Input
+      ref={input}
+      autoFocus
+      value={value}
+      style={{ flexGrow: 1, flexBasis: 0, wrap: false, fontSize: rem * 0.82 }}
+      caretColor={theme.accent}
+      selectionColor={theme.selection}
+      onChange={setValue}
+      onSubmit={(text) => actions.urlSubmit(text)}
+    />
+  );
+}
+
 export function TabStrip({
   tabs,
   actions,
   rem,
   width,
   url,
+  urlEdit,
   theme,
 }: {
   tabs: TabRow[];
@@ -177,6 +209,7 @@ export function TabStrip({
   rem: number;
   width: number;
   url: string;
+  urlEdit: boolean;
   theme: Theme;
 }) {
   const [hovered, setHovered] = useState<number | null>(null);
@@ -230,8 +263,9 @@ export function TabStrip({
     innerGap +
     (active ? label(active).length + 1 : 0) * charW +
     (active ? indicatorCount(active) * (slotW + innerGap) : 0);
-  const activeWidth =
-    tabs.length === 1
+  const activeWidth = urlEdit
+    ? Math.max(rem * 4, Math.min(rem * 28, avail - sum))
+    : tabs.length === 1
       ? Math.max(rem * 4, Math.min(intrinsicActive, avail))
       : Math.max(rem * 4, Math.min(rem * 26, avail - sum));
   const { entries, unfreeze } = useCompactTabs(
@@ -274,7 +308,7 @@ export function TabStrip({
               minWidth: 0,
               height: rem * 1.6,
               alignItems: "center",
-              justifyContent: tabs.length <= 1 ? "center" : undefined,
+              justifyContent: tabs.length <= 1 && !urlEdit ? "center" : undefined,
               gap: innerGap,
               padding: {
                 left: Math.min(padX, tabWidth * 0.25),
@@ -286,7 +320,7 @@ export function TabStrip({
               },
               cornerRadius: rem * 0.45,
               background:
-                tabs.length > 1 && tab.active && !ghost ? theme.hover : undefined,
+                (tabs.length > 1 || urlEdit) && tab.active && !ghost ? theme.hover : undefined,
               hoverBackground: ghost || (tab.active && tabs.length > 1) ? undefined : theme.hover,
               flexShrink: tab.active && !ghost ? 1 : 0,
               overflow: "hidden",
@@ -337,26 +371,30 @@ export function TabStrip({
             ) : (
               <Box style={{ width: slotW, height: slotW, flexShrink: 0 }} />
             )}
-            <Text
-              style={{
-                fontSize: rem * 0.82,
-                color:
-                  tab.agentControlled && !ghost
-                    ? tab.active
-                      ? theme.accent
-                      : mix(theme.muted, theme.accent, 0.6)
-                    : tab.active && !ghost
-                      ? theme.fg
-                      : theme.muted,
-                wrap: false,
-                ellipsis: true,
-                selectable: false,
-                flexShrink: 1,
-                overflow: "hidden",
-              }}
-            >
-              {label(tab)}
-            </Text>
+            {tab.active && urlEdit && !ghost ? (
+              <UrlField url={url} actions={actions} rem={rem} theme={theme} />
+            ) : (
+              <Text
+                style={{
+                  fontSize: rem * 0.82,
+                  color:
+                    tab.agentControlled && !ghost
+                      ? tab.active
+                        ? theme.accent
+                        : mix(theme.muted, theme.accent, 0.6)
+                      : tab.active && !ghost
+                        ? theme.fg
+                        : theme.muted,
+                  wrap: false,
+                  ellipsis: true,
+                  selectable: false,
+                  flexShrink: 1,
+                  overflow: "hidden",
+                }}
+              >
+                {label(tab)}
+              </Text>
+            )}
             {!ghost && capturing(tab) && (
               <Box
                 style={{

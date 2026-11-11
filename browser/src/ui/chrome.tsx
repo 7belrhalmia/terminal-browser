@@ -7,7 +7,7 @@ import type { IconName } from "./icons";
 import { ClearDataDialog } from "./clear-data-dialog";
 import { PageContextMenu } from "./context-menu";
 import { MarkupCanvas } from "./markup-canvas";
-import { NewTabCard, PaletteCard, UrlCard } from "./modals";
+import { NewTabCard, PaletteCard } from "./modals";
 import { DownloadHud, FindBar, Toast, ZoomHud } from "./overlays";
 import { PermissionPrompt } from "./permission-prompt";
 import { SettingsCard } from "./settings";
@@ -115,6 +115,7 @@ export function Chrome({
             layout={layout}
             theme={theme}
             tabs={tabs}
+            urlEdit={urlEdit}
             record={record}
             profiling={profiling}
             grabActive={grabActive}
@@ -193,7 +194,17 @@ export function Chrome({
         </Box>
       )}
       {newTab && <NewTabCard view={newTab} actions={actions} layout={layout} theme={theme} />}
-      {urlEdit && <UrlCard state={state} actions={actions} layout={layout} theme={theme} />}
+      {urlEdit && (
+        <Box
+          style={{
+            position: "absolute",
+            inset: { top: layout.toolbarHeight, left: 0 },
+            width: layout.width,
+            height: layout.height - layout.toolbarHeight,
+          }}
+          onClick={actions.urlEditCancel}
+        />
+      )}
       {palette && <PaletteCard view={palette} actions={actions} layout={layout} theme={theme} />}
       {settings && (
         <SettingsCard view={settings} actions={actions.settings} layout={layout} theme={theme} />
@@ -277,6 +288,7 @@ function Toolbar({
   layout,
   theme,
   tabs,
+  urlEdit,
   record,
   profiling,
   grabActive,
@@ -286,6 +298,7 @@ function Toolbar({
   layout: ChromeLayout;
   theme: Theme;
   tabs: TabRow[];
+  urlEdit: boolean;
   record: RecordView | null;
   profiling: boolean;
   grabActive: boolean;
@@ -342,6 +355,7 @@ function Toolbar({
         rem={rem}
         width={stripWidth}
         url={state.url}
+        urlEdit={urlEdit}
         theme={theme}
       />
       <ToolbarButton

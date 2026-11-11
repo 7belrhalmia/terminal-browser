@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Box, Input, Text } from "@zenbu-labs/pixel";
 import type { NodeHandle } from "@zenbu-labs/pixel";
-import type { WebViewState } from "@zenbu-labs/pixel";
 import { Icon } from "./icons";
 import type { Theme } from "./theme";
 import type { ChromeActions, ChromeLayout, NewTabView, PaletteView } from "./types";
@@ -144,51 +143,6 @@ export function PaletteCard({
             </Text>
           </Box>
         ))}
-      </Box>
-    </ModalCard>
-  );
-}
-
-export function UrlCard({
-  state,
-  actions,
-  layout,
-  theme,
-}: {
-  state: WebViewState;
-  actions: ChromeActions;
-  layout: ChromeLayout;
-  theme: Theme;
-}) {
-  const rem = layout.rem;
-  const cardW = Math.min(rem * 28, layout.width - rem * 4);
-  const [value, setValue] = useState(state.url === "about:blank" ? "" : state.url);
-  const input = useRef<NodeHandle | null>(null);
-  useEffect(() => {
-    input.current?.focus();
-    input.current?.selectAll();
-  }, []);
-  return (
-    <ModalCard layout={layout} theme={theme} width={cardW} onClose={actions.urlEditCancel}>
-      <Box
-        style={{
-          height: rem * 2.4,
-          alignItems: "center",
-          gap: rem * 0.5,
-          padding: { left: rem * 0.85, right: rem * 0.85 },
-        }}
-      >
-        <Icon icon="search" size={rem} color={theme.muted} />
-        <Input
-          ref={input}
-          autoFocus
-          value={value}
-          style={{ flexGrow: 1, flexBasis: 0, wrap: false, fontSize: rem }}
-          caretColor={theme.accent}
-          selectionColor={theme.selection}
-          onChange={setValue}
-          onSubmit={(text) => actions.urlSubmit(text)}
-        />
       </Box>
     </ModalCard>
   );
