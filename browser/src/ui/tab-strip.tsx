@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Box, Image, Input, Text } from "@zenbu-labs/pixel";
-import type { NodeHandle, Rgba } from "@zenbu-labs/pixel";
+import type { DragEvent, NodeHandle, Rgba } from "@zenbu-labs/pixel";
 import { displayUrl } from "../url";
 import { Icon } from "./icons";
 import type { IconName } from "./icons";
@@ -73,6 +73,9 @@ function useCompactTabs(
       s.order.push(tab.id);
     }
   }
+  const tabOrder = tabs.map((tab) => tab.id);
+  let nextLive = 0;
+  s.order = s.order.map((id) => (live.has(id) ? tabOrder[nextLive++]! : id));
   s.mounted = true;
   s.lastActive = activeId;
   for (const entry of s.entries.values()) {
@@ -273,6 +276,43 @@ export function TabStrip({
     (tab) => (tab.active ? activeWidth : inactiveWidths.get(tab.id) ?? minInactive),
     pointerIn,
   );
+  const shownWidths = useRef(new Map<number, number>());
+  shownWidths.current = new Map(entries.map((entry) => [entry.tab.id, entry.width]));
+  const drag = useRef<{ id: number; anchor: number; order: number[]; moved: boolean } | null>(
+    null,
+  );
+  const dragTab = (tab: TabRow, event: DragEvent) => {
+    if (event.phase === "start") {
+      drag.current = { id: tab.id, anchor: event.x, order: tabs.map((t) => t.id), moved: false };
+      return;
+    }
+    const current = drag.current;
+    if (!current) return;
+    if (event.phase === "end") {
+      drag.current = null;
+      if (current.moved) return;
+      if (tab.active) actions.urlEdit();
+      else actions.tabSwitch(tab.id);
+      return;
+    }
+    const { order } = current;
+    const span = (id: number) => (shownWidths.current.get(id) ?? 0) + gap;
+    const from = order.indexOf(current.id);
+    let at = from;
+    while (at < order.length - 1 && event.x - current.anchor > span(order[at + 1]!) / 2) {
+      current.anchor += span(order[at + 1]!);
+      [order[at], order[at + 1]] = [order[at + 1]!, order[at]!];
+      at++;
+    }
+    while (at > 0 && current.anchor - event.x > span(order[at - 1]!) / 2) {
+      current.anchor -= span(order[at - 1]!);
+      [order[at], order[at - 1]] = [order[at - 1]!, order[at]!];
+      at--;
+    }
+    if (at === from) return;
+    current.moved = true;
+    actions.tabMove(current.id, at);
+  };
   return (
     <Box
       style={{
@@ -325,7 +365,7 @@ export function TabStrip({
               flexShrink: tab.active && !ghost ? 1 : 0,
               overflow: "hidden",
             }}
-            onClick={() => (tab.active ? actions.urlEdit() : actions.tabSwitch(tab.id))}
+            onDrag={ghost ? undefined : (event) => dragTab(tab, event)}
             onMouseEnter={() => setHovered(tab.id)}
             onMouseLeave={() => setHovered((id) => (id === tab.id ? null : id))}
           >

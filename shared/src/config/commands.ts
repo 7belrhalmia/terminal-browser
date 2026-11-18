@@ -23,6 +23,14 @@ export const COMMANDS = {
     label: "Previous tab",
     keys: platform(["ctrl+shift+tab", "cmd+alt+left"], ["ctrl+shift+tab", "ctrl+pageup"]),
   },
+  "tab.moveLeft": {
+    label: "Move tab left",
+    keys: platform(["cmd+alt+shift+left", "ctrl+shift+pageup"], ["ctrl+shift+pageup"]),
+  },
+  "tab.moveRight": {
+    label: "Move tab right",
+    keys: platform(["cmd+alt+shift+right", "ctrl+shift+pagedown"], ["ctrl+shift+pagedown"]),
+  },
   "url.edit": { label: "Edit URL", keys: platform(["cmd+l"], ["ctrl+l"]) },
   find: { label: "Find in page", keys: platform(["cmd+shift+f"], ["ctrl+shift+f"]) },
   "page.reload": { label: "Reload page", keys: platform(["cmd+r"], ["ctrl+r"]) },

@@ -161,6 +161,7 @@ export interface ChromeActions {
   paletteClose(): void;
   tabSwitch(id: number): void;
   tabClose(id: number): void;
+  tabMove(id: number, index: number): void;
   tabNew(): void;
   tabMenu(): void;
   tabMute(id: number): void;

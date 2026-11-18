@@ -179,6 +179,16 @@ export class TabManager {
     this.host.requestRender();
   }
 
+  move(id: number, index: number) {
+    const from = this.tabs.findIndex((t) => t.id === id);
+    const to = Math.max(0, Math.min(index, this.tabs.length - 1));
+    if (from < 0 || from === to) return;
+    const [tab] = this.tabs.splice(from, 1);
+    this.tabs.splice(to, 0, tab!);
+    this.host.onTabsChanged();
+    this.host.requestRender();
+  }
+
   has(id: number): boolean {
     return this.tabs.some((tab) => tab.id === id);
   }

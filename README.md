@@ -61,6 +61,7 @@ terminal-browser upgrade # upgrade to the latest version
 | Quit | ctrl+q or ctrl+c | ctrl+q |
 | New tab | cmd+t | ctrl+t |
 | Next / previous tab | ctrl+tab / ctrl+shift+tab or cmd+alt+right / cmd+alt+left | ctrl+tab / ctrl+shift+tab or ctrl+pagedown / ctrl+pageup |
+| Move tab left / right (or drag it) | cmd+alt+shift+left / cmd+alt+shift+right or ctrl+shift+pageup / ctrl+shift+pagedown | ctrl+shift+pageup / ctrl+shift+pagedown |
 | Edit URL | cmd+l | ctrl+l |
 | Command palette | cmd+p | ctrl+k or alt+k |
 | Find in page | cmd+shift+f | ctrl+shift+f |

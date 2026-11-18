@@ -643,6 +643,7 @@ class Session {
     paletteClose: () => this.closePalette(),
     tabSwitch: (id) => this.tabs.activate(id),
     tabClose: (id) => this.closeOrShutdown(id),
+    tabMove: (id, index) => this.tabs.move(id, index),
     tabNew: () => this.openNewTabModal(),
     tabMenu: () => this.toggleToolbarMenu(),
     grab: () => void this.toggleGrab(),
@@ -936,6 +937,12 @@ class Session {
         return;
       case "tab.previous":
         this.activateAdjacentTab(-1);
+        return;
+      case "tab.moveLeft":
+        this.moveActiveTab(-1);
+        return;
+      case "tab.moveRight":
+        this.moveActiveTab(1);
         return;
       case "url.edit":
         this.openUrlEdit();
@@ -1595,6 +1602,8 @@ class Session {
       command("find"),
       command("tab.next"),
       command("tab.previous"),
+      command("tab.moveLeft"),
+      command("tab.moveRight"),
       command("record.toggle"),
       command("grab.toggle"),
       command("devtools.toggle"),
@@ -1655,6 +1664,12 @@ class Session {
     if (!active || tabs.length < 2) return;
     const at = tabs.findIndex((tab) => tab.id === active.id);
     this.tabs.activate(tabs[(at + step + tabs.length) % tabs.length]!.id);
+  }
+
+  private moveActiveTab(step: 1 | -1) {
+    const active = this.tabs.active;
+    if (!active) return;
+    this.tabs.move(active.id, this.tabs.all().indexOf(active) + step);
   }
 
   private requestDevReload(socketPath: string) {
