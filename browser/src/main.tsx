@@ -14,8 +14,11 @@ import { registerScheme } from "./pages/scheme";
 app.commandLine.appendSwitch("disable-renderer-backgrounding");
 app.commandLine.appendSwitch("disable-background-timer-throttling");
 app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
-app.commandLine.appendSwitch("enable-features", "WebMCP");
+// On macOS, frames paced by the display stop for good once the browser's user session leaves the screen; a timer keeps them coming.
+app.commandLine.appendSwitch("enable-features", "WebMCP,ForceMacVSyncTimerForDebugging");
 app.commandLine.appendSwitch("disable-features", "FedCm");
+// Microsoft Teams redirects any browser whose user agent names Electron to a desktop-app address that is empty on the web.
+app.userAgentFallback = app.userAgentFallback.replace(/ Electron\/\S+/, "");
 
 if (process.env.TERMINAL_BROWSER_DISABLE_GPU === "1") {
   app.commandLine.appendSwitch("disable-gpu");
