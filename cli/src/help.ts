@@ -87,12 +87,13 @@ Examples:
     summary: "Clear cookies, site data and cache, like a browser's Clear browsing data",
     usage: "terminal-browser clear-browsing-data [options]",
     body: `
-Clears cookies and site data, and cached images and files, for every site in
-every terminal-browser window, signing you out. Asks first when run in a
+Clears the browsing history, cookies and site data, and cached images and
+files, for every site in every terminal-browser window, signing you out. Asks first when run in a
 terminal; otherwise needs --yes. Reload open pages to see the change.
 
 Options:
   -y, --yes           Clear without asking
+  --history           Only clear the browsing history
   --cookies           Only clear cookies and site data
   --cache             Only clear cached images and files
   --browser <key>     A browser key from terminal-browser ls

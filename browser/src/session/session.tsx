@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import crypto from "node:crypto";
 import net from "node:net";
 import path from "node:path";
 
@@ -86,6 +87,8 @@ import type { DevtoolsPlacement, SurfaceLayout } from "./layout";
 import { SettingsManager } from "./settings";
 import { Telemetry } from "../telemetry";
 import { fetchSuggestions } from "./suggest";
+import { browsing, windowClosed, windowOpened } from "./browsing";
+import type { Page, SavedWindow } from "./browsing";
 import { TabManager } from "./tabs";
 
 function displayHz(): number {
@@ -141,6 +144,7 @@ function bundledFontPath(): string {
 
 interface NewTabState {
   query: string;
+  pages: Page[];
   suggestions: string[];
   apps: RegisteredApp[];
   appMatches: RegisteredApp[];
@@ -213,6 +217,12 @@ class Session {
   });
   private readonly tabs: TabManager;
   private readonly fallbackState: WebViewState;
+  private readonly profile: string;
+  private readonly windowPlace: string | null;
+  private readonly restoredWindow: SavedWindow | null;
+  private readonly windowId: string;
+  private windowSaveTimer: ReturnType<typeof setTimeout> | null = null;
+  private windowHeartbeat: ReturnType<typeof setInterval> | null = null;
 
   private root: Root | null = null;
   private registry: Registry | null = null;
@@ -243,6 +253,7 @@ class Session {
   private clearData: ClearDataState | null = null;
   private findOpen = false;
   private urlEditOpen = false;
+  private urlEditPages: { pages: Page[]; index: number } = { pages: [], index: -1 };
   private palette: { query: string; index: number } | null = null;
   private newTab: NewTabState | null = null;
   private zoomHud: number | null = null;
@@ -288,12 +299,20 @@ class Session {
     const socksPort = Number(flagValue(this.argv, "--socks-port"));
     this.socksPort = Number.isInteger(socksPort) && socksPort > 0 ? socksPort : null;
     this.partition = sshTarget ? `ssh-${sshTarget.replace(/[^A-Za-z0-9@._-]/g, "-")}` : null;
-    this.fallbackState = initialWebViewState(this.initialUrl());
+    this.profile = this.partition ?? "";
+    this.windowPlace = ctx.env.REX_BLOCK ?? ctx.env.TMUX_PANE ?? ctx.env.WEZTERM_PANE ?? null;
+    windowOpened(ctx.key);
+    this.restoredWindow = this.urlArgument() ? null : this.claimSavedWindow();
+    this.windowId = this.restoredWindow?.id ?? crypto.randomUUID();
+    this.fallbackState = initialWebViewState(
+      this.restoredWindow?.tabs[this.restoredWindow.active]?.url ?? this.initialUrl(),
+    );
     this.copyOnSelect = ctx.env.TERMINAL_BROWSER_COPY_ON_SELECT === "1";
     this.browserPreload = reactGrabPreloadPath(this.copyOnSelect);
     this.tabs = new TabManager(
       {
         onActivated: () => {
+          this.scheduleWindowSave();
           this.pageMenu = null;
           this.reconcileRecord();
           this.recalculateLayout();
@@ -305,6 +324,7 @@ class Session {
         onTabOpened: (opener, url) => this.records.get(opener.id)?.linkOpened(url),
         tabSwitchAllowed: () => !this.activeRecord()?.reviewing,
         onTabsChanged: () => {
+          this.scheduleWindowSave();
           this.registry?.update();
           for (const record of [...this.records.values()]) {
             if (record.active && !this.tabs.has(record.target.tabId)) record.tabClosed();
@@ -319,6 +339,10 @@ class Session {
             watcher.dispose();
             this.copyWatchers.delete(id);
           }
+        },
+        onTabState: (tab, urlChanged) => {
+          this.rememberVisit(tab, urlChanged);
+          this.scheduleWindowSave();
         },
         onActiveState: (state, urlChanged) => {
           if (urlChanged) rememberUrl(state.url);
@@ -370,7 +394,8 @@ class Session {
     this.applyRenderSettings();
     this.settings.watch();
     this.recalculateLayout();
-    this.tabs.create(this.fallbackState.url);
+    this.openFirstTabs();
+    this.windowHeartbeat = setInterval(() => this.saveWindow(this.ctx.key), 60_000);
     this.registry = new Registry({
       key: this.ctx.key,
       tty: this.ctx.tty ?? null,
@@ -451,6 +476,10 @@ class Session {
     this.registry?.dispose();
     this.registry = null;
     this.settings.dispose();
+    if (this.windowSaveTimer) clearTimeout(this.windowSaveTimer);
+    if (this.windowHeartbeat) clearInterval(this.windowHeartbeat);
+    this.saveWindow(null);
+    windowClosed(this.ctx.key);
     this.tabs.stopAll();
     if (this.root) this.root.stop(code);
     else this.ctx.onClose(code);
@@ -555,6 +584,11 @@ class Session {
             : null
         }
         urlEdit={this.urlEditOpen}
+        urlSuggestions={
+          this.urlEditOpen && this.urlEditPages.pages.length > 0
+            ? { suggestions: this.urlEditPages.pages.map(pageRow), index: this.urlEditPages.index }
+            : null
+        }
         zoomHud={this.zoomHud}
         download={this.download}
         toast={this.toast}
@@ -626,8 +660,26 @@ class Session {
     clearDataCancel: () => this.closeClearData(),
     urlEditCancel: () => this.closeUrlEdit(),
     urlSubmit: (text) => {
+      if (this.urlEditPages.index >= 0) {
+        this.actions.urlPick(this.urlEditPages.index);
+        return;
+      }
       this.closeUrlEdit();
       if (text.trim()) this.tabs.activeHandle?.loadURL(this.resolveInput(text));
+    },
+    urlQuery: (text) => {
+      const current = this.tabs.activeState?.url ?? "";
+      this.urlEditPages = {
+        pages: text.trim() && text !== current ? this.historyMatches(text, 7).filter((page) => page.url !== current).slice(0, 6) : [],
+        index: -1,
+      };
+      this.render();
+    },
+    urlPick: (index) => {
+      const page = this.urlEditPages.pages[index];
+      if (!page) return;
+      this.closeUrlEdit();
+      this.tabs.activeHandle?.loadURL(page.url);
     },
     findChange: (text) => this.tabs.activeHandle?.find(text),
     findNext: (forward) => this.tabs.activeHandle?.findNext(forward),
@@ -887,7 +939,16 @@ class Session {
       return true;
     }
     if (this.urlEditOpen) {
+      const step = listStep(event);
       if (event.key === "escape") this.closeUrlEdit();
+      else if (step) {
+        const list = this.urlEditPages;
+        const count = list.pages.length;
+        if (count > 0) {
+          list.index = step > 0 ? (list.index >= count - 1 ? -1 : list.index + 1) : list.index <= -1 ? count - 1 : list.index - 1;
+          this.render();
+        }
+      }
       return true;
     }
     const prompted = this.tabs.active;
@@ -1250,6 +1311,7 @@ class Session {
   }
 
   private clearBrowsingData(kinds: BrowsingDataKind[]): Promise<void> {
+    if (kinds.includes("history")) browsing().clearHistory(this.profile);
     return clearBrowsingData(browsingSession(this.partition), kinds);
   }
 
@@ -1459,21 +1521,34 @@ class Session {
   private openUrlEdit() {
     if (this.urlEditOpen) return;
     this.urlEditOpen = true;
+    this.urlEditPages = { pages: [], index: -1 };
     this.blurToOverlay();
+    this.root?.setKeyCapture(["up", "down"]);
     this.render();
   }
 
   private closeUrlEdit() {
     if (!this.urlEditOpen) return;
     this.urlEditOpen = false;
+    this.urlEditPages = { pages: [], index: -1 };
+    this.root?.setKeyCapture(this.findOpen ? ["enter"] : []);
     this.refocusPage();
     this.render();
+  }
+
+  private historyMatches(query: string, limit: number): Page[] {
+    try {
+      return browsing().search(this.profile, query, limit);
+    } catch {
+      return [];
+    }
   }
 
   private openNewTabModal() {
     if (this.newTab) return;
     this.newTab = {
       query: "",
+      pages: this.historyMatches("", 5),
       suggestions: [],
       apps: safeListApps(),
       appMatches: [],
@@ -1495,6 +1570,7 @@ class Session {
         id: app.id,
         name: app.name,
       })),
+      ...session.pages.map(pageRow),
       ...session.suggestions.map((text) => ({ kind: "search" as const, text })),
     ];
   }
@@ -1506,6 +1582,11 @@ class Session {
       const app = this.newTab?.apps.find((entry) => entry.id === row.id);
       this.closeNewTabModal();
       if (app) this.launchApp(app);
+      return;
+    }
+    if (row.kind === "page") {
+      this.closeNewTabModal();
+      this.tabs.create(row.url);
       return;
     }
     this.actions.newTabSubmit(row.text);
@@ -1526,6 +1607,7 @@ class Session {
     session.query = text;
     session.index = -1;
     session.appMatches = matchApps(session.apps, text);
+    session.pages = this.historyMatches(text, text.trim() ? 4 : 5);
     if (session.timer) clearTimeout(session.timer);
     session.timer = null;
     if (!text.trim() || this.settings.get("search.suggestions") === SUGGESTIONS_OFF) {
@@ -1739,8 +1821,57 @@ class Session {
     return (this.tabs.activeState?.url ?? "").startsWith(START_URL);
   }
 
+  private urlArgument(): string | null {
+    return this.argv.find((argument) => !argument.startsWith("-")) ?? null;
+  }
+
+  private claimSavedWindow(): SavedWindow | null {
+    try {
+      return browsing().claimWindow(this.profile, this.windowPlace, this.ctx.key);
+    } catch {
+      return null;
+    }
+  }
+
+  private openFirstTabs() {
+    const saved = this.restoredWindow;
+    if (!saved) {
+      this.tabs.create(this.fallbackState.url);
+      return;
+    }
+    const ids = saved.tabs.map((page) => this.tabs.create(page.url, false).id);
+    this.tabs.activate(ids[saved.active] ?? ids[0]!);
+  }
+
+  private scheduleWindowSave() {
+    if (this.shuttingDown || this.windowSaveTimer) return;
+    this.windowSaveTimer = setTimeout(() => {
+      this.windowSaveTimer = null;
+      this.saveWindow(this.ctx.key);
+    }, 500);
+  }
+
+  private saveWindow(owner: string | null) {
+    const tabs = this.tabs.all();
+    if (tabs.length === 0) return;
+    const active = this.tabs.active;
+    try {
+      browsing().saveWindow(
+        { id: this.windowId, profile: this.profile, place: this.windowPlace, owner },
+        tabs.map((tab) => ({ url: tab.state.url || tab.url, title: tab.state.title })),
+        Math.max(0, tabs.findIndex((tab) => tab === active)),
+      );
+    } catch { }
+  }
+
+  private rememberVisit(tab: Tab, urlChanged: boolean) {
+    try {
+      browsing().visit(this.profile, { url: tab.state.url, title: tab.state.title }, urlChanged);
+    } catch { }
+  }
+
   private initialUrl(): string {
-    const arg = this.argv.find((argument) => !argument.startsWith("-"));
+    const arg = this.urlArgument();
     if (arg) return normalizeUrl(arg, this.ctx.cwd, this.searchUrl());
     try {
       const last = lastUrl()?.trim();
@@ -1760,6 +1891,10 @@ interface PaletteAction {
 function splitDirection(value: string | null): InstanceRow["splitDir"] {
   const directions = ["right", "left", "down", "up"] as const;
   return directions.find((direction) => direction === value) ?? null;
+}
+
+function pageRow(page: Page): NewTabSuggestion {
+  return { kind: "page", url: page.url, title: page.title };
 }
 
 function flagValue(argv: string[], flag: string): string | null {

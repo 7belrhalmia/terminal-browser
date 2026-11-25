@@ -492,6 +492,7 @@ async function newTabCommand(url: string | undefined, key: string | undefined): 
 }
 
 const BROWSING_DATA_NAMES: Record<string, string> = {
+  history: "browsing history",
   siteData: "cookies and site data",
   cache: "cached images and files",
 };
@@ -516,6 +517,7 @@ async function clearBrowsingDataCommand(args: string[]): Promise<number> {
   const key = takeFlag(args, "--browser");
   const confirmed = takeBoolFlag(args, "--yes") || takeBoolFlag(args, "-y");
   const kinds = [
+    ...(takeBoolFlag(args, "--history") ? ["history"] : []),
     ...(takeBoolFlag(args, "--cookies") ? ["siteData"] : []),
     ...(takeBoolFlag(args, "--cache") ? ["cache"] : []),
   ];

@@ -30,6 +30,7 @@ export interface TabTarget {
 export interface TabHost {
   onActivated(): void;
   onActiveState(state: WebViewState, urlChanged: boolean): void;
+  onTabState(tab: Tab, urlChanged: boolean, titleChanged: boolean): void;
   onPageMenu(params: Electron.ContextMenuParams): void;
   onTabsChanged(): void;
   onTabOpened(opener: Tab, url: string): void;
@@ -103,7 +104,9 @@ export class TabManager {
     const tab = this.get(id);
     if (!tab) return;
     const urlChanged = state.url !== tab.state.url;
+    const titleChanged = state.title !== tab.state.title;
     tab.state = state;
+    if (urlChanged || titleChanged) this.host.onTabState(tab, urlChanged, titleChanged);
     if (!tab.targetId) void this.resolveTargetId(tab);
     if (tab.id === this.activeId) this.host.onActiveState(state, urlChanged);
     this.host.requestRender();

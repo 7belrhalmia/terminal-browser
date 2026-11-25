@@ -192,7 +192,10 @@ function UrlField({
       style={{ flexGrow: 1, flexBasis: 0, wrap: false, fontSize: rem * 0.82 }}
       caretColor={theme.accent}
       selectionColor={theme.selection}
-      onChange={setValue}
+      onChange={(text) => {
+        setValue(text);
+        actions.urlQuery(text);
+      }}
       onSubmit={(text) => actions.urlSubmit(text)}
     />
   );

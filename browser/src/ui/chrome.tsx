@@ -7,7 +7,7 @@ import type { IconName } from "./icons";
 import { ClearDataDialog } from "./clear-data-dialog";
 import { PageContextMenu } from "./context-menu";
 import { MarkupCanvas } from "./markup-canvas";
-import { NewTabCard, PaletteCard } from "./modals";
+import { NewTabCard, PaletteCard, UrlSuggestionsCard } from "./modals";
 import { DownloadHud, FindBar, Toast, ZoomHud } from "./overlays";
 import { PermissionPrompt } from "./permission-prompt";
 import { SettingsCard } from "./settings";
@@ -49,6 +49,7 @@ export function Chrome({
   tabs,
   newTab,
   urlEdit,
+  urlSuggestions,
   zoomHud,
   download,
   toast,
@@ -74,6 +75,7 @@ export function Chrome({
   tabs: TabRow[];
   newTab: NewTabView | null;
   urlEdit: boolean;
+  urlSuggestions: NewTabView | null;
   zoomHud: number | null;
   download: DownloadView | null;
   toast: ToastView | null;
@@ -205,6 +207,7 @@ export function Chrome({
           onClick={actions.urlEditCancel}
         />
       )}
+      {urlSuggestions && <UrlSuggestionsCard view={urlSuggestions} actions={actions} layout={layout} theme={theme} />}
       {palette && <PaletteCard view={palette} actions={actions} layout={layout} theme={theme} />}
       {settings && (
         <SettingsCard view={settings} actions={actions.settings} layout={layout} theme={theme} />

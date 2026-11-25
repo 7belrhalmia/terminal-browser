@@ -11,11 +11,13 @@ const COPY = {
   cancel: "Cancel",
   confirm: "Delete data",
   clearing: "Deleting…",
+  history: "Browsing history",
   siteData: "Cookies and site data",
   cache: "Cached images and files",
 };
 
 const ROWS: { kind: BrowsingDataKind; label: string }[] = [
+  { kind: "history", label: COPY.history },
   { kind: "siteData", label: COPY.siteData },
   { kind: "cache", label: COPY.cache },
 ];

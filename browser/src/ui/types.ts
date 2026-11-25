@@ -39,6 +39,7 @@ export interface PaletteView {
 
 export type NewTabSuggestion =
   | { kind: "search"; text: string }
+  | { kind: "page"; url: string; title: string }
   | { kind: "app"; id: string; name: string };
 
 export interface NewTabView {
@@ -153,6 +154,8 @@ export interface ChromeActions {
   urlEdit(): void;
   urlEditCancel(): void;
   urlSubmit(text: string): void;
+  urlQuery(text: string): void;
+  urlPick(index: number): void;
   findChange(text: string): void;
   findNext(forward: boolean): void;
   findClose(): void;

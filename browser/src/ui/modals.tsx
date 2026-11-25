@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { Box, Input, Text } from "@zenbu-labs/pixel";
 import type { NodeHandle } from "@zenbu-labs/pixel";
 import { Icon } from "./icons";
+import type { IconName } from "./icons";
+import { displayUrl } from "../url";
 import type { Theme } from "./theme";
-import type { ChromeActions, ChromeLayout, NewTabView, PaletteView } from "./types";
+import type { ChromeActions, ChromeLayout, NewTabSuggestion, NewTabView, PaletteView } from "./types";
 
 export function Backdrop({ layout, onClose }: { layout: ChromeLayout; onClose(): void }) {
   return (
@@ -160,8 +162,7 @@ export function NewTabCard({
   theme: Theme;
 }) {
   const rem = layout.rem;
-  const cardW = Math.min(rem * 28, layout.width - rem * 4);
-  const rowH = rem * 2;
+  const cardW = Math.min(rem * 34, layout.width - rem * 4);
   const input = useRef<NodeHandle | null>(null);
   useEffect(() => {
     input.current?.focus();
@@ -187,54 +188,139 @@ export function NewTabCard({
           onChange={(text) => actions.newTabQuery(text)}
         />
       </Box>
-      {view.suggestions.length > 0 && (
-        <Box style={{ flexDirection: "column" }}>
-          {view.suggestions.map((suggestion, i) => {
-            const text = suggestion.kind === "app" ? suggestion.name : suggestion.text;
-            const maxChars = Math.floor((cardW - rem * 3.15) / (rem * 0.95 * 0.6));
-            const shown =
-              text.length > maxChars
-                ? `${text.slice(0, Math.max(0, maxChars - 1)).trimEnd()}…`
-                : text;
-            return (
-              <Box
-                key={suggestion.kind === "app" ? `app:${suggestion.id}` : `${i}:${text}`}
-                style={{
-                  height: rowH,
-                  alignItems: "center",
-                  gap: rem * 0.6,
-                  padding: { left: rem * 0.85, right: rem * 0.85 },
-                  background: i === view.index ? theme.hover : undefined,
-                  hoverBackground: theme.hover,
-                  cornerRadius: lastRowRadius(i === view.suggestions.length - 1, rem),
-                }}
-                onClick={() => actions.newTabPick(i)}
-              >
-                <Icon
-                  icon={suggestion.kind === "app" ? "terminal" : "search"}
-                  size={rem * 0.8}
-                  color={theme.disabled}
-                />
-                <Text
-                  style={{
-                    flexGrow: 1,
-                    flexBasis: 0,
-                    flexShrink: 1,
-                    fontSize: rem * 0.95,
-                    color: i === view.index ? theme.fg : theme.muted,
-                    wrap: false,
-                    selectable: false,
-                    overflow: "hidden",
-                  }}
-                >
-                  {shown}
-                </Text>
-              </Box>
-            );
-          })}
-        </Box>
-      )}
+      <SuggestionRows
+        view={view}
+        width={cardW}
+        rem={rem}
+        theme={theme}
+        onPick={(index) => actions.newTabPick(index)}
+      />
     </ModalCard>
   );
 }
 
+
+export function UrlSuggestionsCard({
+  view,
+  actions,
+  layout,
+  theme,
+}: {
+  view: NewTabView;
+  actions: ChromeActions;
+  layout: ChromeLayout;
+  theme: Theme;
+}) {
+  const rem = layout.rem;
+  const width = Math.min(rem * 36, layout.width - rem);
+  return (
+    <Box
+      style={{
+        position: "absolute",
+        inset: { top: layout.toolbarHeight, left: rem * 0.5 },
+        width,
+        flexDirection: "column",
+        background: theme.overlay,
+        cornerRadius: rem * 0.55,
+        border: { width: 1, color: theme.fieldBorder },
+        overflow: "hidden",
+      }}
+      onClick={() => {}}
+    >
+      <SuggestionRows view={view} width={width} rem={rem} theme={theme} onPick={(index) => actions.urlPick(index)} />
+    </Box>
+  );
+}
+
+function suggestionIcon(suggestion: NewTabSuggestion): IconName {
+  if (suggestion.kind === "app") return "terminal";
+  if (suggestion.kind === "page") return "clock";
+  return "search";
+}
+
+function suggestionKey(suggestion: NewTabSuggestion, index: number): string {
+  if (suggestion.kind === "app") return `app:${suggestion.id}`;
+  if (suggestion.kind === "page") return `page:${suggestion.url}`;
+  return `${index}:${suggestion.text}`;
+}
+
+function SuggestionRows({
+  view,
+  width,
+  rem,
+  theme,
+  onPick,
+}: {
+  view: NewTabView;
+  width: number;
+  rem: number;
+  theme: Theme;
+  onPick(index: number): void;
+}) {
+  if (view.suggestions.length === 0) return null;
+  const rowH = rem * 2;
+  const maxChars = Math.floor((width - rem * 3.15) / (rem * 0.95 * 0.6));
+  const clip = (text: string, chars: number) =>
+    text.length > chars ? `${text.slice(0, Math.max(0, chars - 1)).trimEnd()}…` : text;
+  return (
+    <Box style={{ flexDirection: "column" }}>
+      {view.suggestions.map((suggestion, i) => {
+        const selected = i === view.index;
+        const page = suggestion.kind === "page" ? suggestion : null;
+        const text =
+          suggestion.kind === "app"
+            ? suggestion.name
+            : suggestion.kind === "page"
+              ? suggestion.title || displayUrl(suggestion.url)
+              : suggestion.text;
+        const shown = clip(text, page?.title ? Math.floor(maxChars * 0.55) : maxChars);
+        const address = page?.title ? clip(displayUrl(page.url), maxChars - shown.length - 2) : "";
+        return (
+          <Box
+            key={suggestionKey(suggestion, i)}
+            style={{
+              height: rowH,
+              alignItems: "center",
+              gap: rem * 0.6,
+              padding: { left: rem * 0.85, right: rem * 0.85 },
+              background: selected ? theme.hover : undefined,
+              hoverBackground: theme.hover,
+              cornerRadius: lastRowRadius(i === view.suggestions.length - 1, rem),
+            }}
+            onClick={() => onPick(i)}
+          >
+            <Icon icon={suggestionIcon(suggestion)} size={rem * 0.8} color={theme.disabled} />
+            <Text
+              style={{
+                flexShrink: 1,
+                fontSize: rem * 0.95,
+                color: selected ? theme.fg : theme.muted,
+                wrap: false,
+                selectable: false,
+                overflow: "hidden",
+              }}
+            >
+              {shown}
+            </Text>
+            {address && (
+              <Text
+                style={{
+                  flexGrow: 1,
+                  flexBasis: 0,
+                  flexShrink: 1,
+                  fontSize: rem * 0.8,
+                  color: theme.disabled,
+                  wrap: false,
+                  selectable: false,
+                  overflow: "hidden",
+                }}
+              >
+                {address}
+              </Text>
+            )}
+          </Box>
+        );
+      })}
+    </Box>
+  );
+}

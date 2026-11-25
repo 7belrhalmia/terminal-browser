@@ -2,7 +2,7 @@ import { clearFavicons } from "@zenbu-labs/pixel";
 import { session as electronSession } from "electron";
 import type { Session } from "electron";
 
-export const BROWSING_DATA_KINDS = ["siteData", "cache"] as const;
+export const BROWSING_DATA_KINDS = ["history", "siteData", "cache"] as const;
 
 export type BrowsingDataKind = (typeof BROWSING_DATA_KINDS)[number];
 
